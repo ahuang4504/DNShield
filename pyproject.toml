@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dnshield"
+version = "0.1.0"
+description = "Inline DNS cache poisoning detector lab"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+detector = [
+  "joblib==1.4.2",
+  "NetfilterQueue==1.1.0",
+  "numpy==2.2.5",
+  "scikit-learn==1.8.0",
+]
+training = [
+  "dnspython==2.7.0",
+  "joblib==1.4.2",
+  "numpy==2.2.5",
+  "pandas==2.2.3",
+  "pyarrow==20.0.0",
+  "scikit-learn==1.8.0",
+]
+
+[project.scripts]
+dnshield-attacker = "attacker.kaminsky_flood:main"
+dnshield-client = "client.traffic_generator:main"
+dnshield-detector = "detector.src.main:main"
+dnshield-evaluate = "scripts.run_evaluation:main"
+dnshield-collect-training-features = "detector.training.collect_features:main"
+dnshield-generate-training-data = "detector.training.generate_training_data:main"
+dnshield-train-iforest = "detector.training.train_model:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["attacker", "client", "detector", "scripts"]

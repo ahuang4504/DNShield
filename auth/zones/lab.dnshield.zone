@@ -1,0 +1,7 @@
+$ORIGIN lab.dnshield.
+$TTL 120
+
+@ IN SOA ns1.lab.dnshield. hostmaster.lab.dnshield. 2026041602 120 120 120 120
+@ IN NS ns1.lab.dnshield.
+ns1 IN A 172.30.0.10
+app IN A 192.0.2.10

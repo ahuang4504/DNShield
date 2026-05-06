@@ -1,0 +1,148 @@
+services:
+  detector:
+    build:
+      context: .
+      dockerfile: detector/Dockerfile
+    container_name: dnshield-detector
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      RESOLVER_IP: 172.29.0.10
+      AUTHORITATIVE_IP: 172.30.0.10
+      DETECTOR_ENABLED: ${DETECTOR_ENABLED:-1}
+      FORGED_ANSWER_IP: 203.0.113.99
+      AUTHORITATIVE_ANSWER_IP: 192.0.2.10
+      ATTACK_QUERY_NAME: ${ATTACK_QUERY_NAME:-}
+      ATTACK_TXID_COORDINATION_DIR: /coordination
+      CLIENT_QUERY_PREFIX: ${CLIENT_QUERY_PREFIX:-client}
+      CLIENT_TARGET_ZONE: ${CLIENT_TARGET_ZONE:-lab.dnshield}
+      CLIENT_EXACT_QUERY_NAME: ${CLIENT_EXACT_QUERY_NAME:-}
+      CLIENT_DOMAIN_CORPUS_PATH: ${CLIENT_DOMAIN_CORPUS_PATH:-}
+      CLIENT_SYNTHETIC_ATTACK_EVAL: ${CLIENT_SYNTHETIC_ATTACK_EVAL:-0}
+      IFOREST_THRESHOLD: 0.15
+      IFOREST_MODEL_PATH: /app/detector/training/data/iforest.joblib
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    networks:
+      attacker_net:
+        ipv4_address: 172.28.0.2
+      resolver_net:
+        ipv4_address: 172.29.0.2
+      authoritative_net:
+        ipv4_address: 172.30.0.2
+    volumes:
+      - attack_coordination:/coordination
+
+  attacker:
+    build:
+      context: .
+      dockerfile: attacker/Dockerfile
+    container_name: dnshield-attacker
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      DEFAULT_GATEWAY: 172.28.0.2
+      RESOLVER_IP: 172.29.0.10
+      AUTHORITATIVE_IP: 172.30.0.10
+      ATTACK_TARGET_ZONE: lab.dnshield
+      FORGED_ANSWER_IP: 203.0.113.99
+      RESOLVER_FIXED_OUTGOING_PORT: 33333
+      ATTACK_PACKET_DELAY_SECONDS: 0.000001
+      ATTACK_MAX_SPOOFED_PACKETS: 65536
+      ATTACK_QUERY_NAME: ${ATTACK_QUERY_NAME:-}
+      ATTACK_VALID_TXID_POSITION: 6
+      ATTACK_VALID_TXID_WAIT_SECONDS: 5
+      ATTACK_TXID_COORDINATION_DIR: /coordination
+      ATTACK_EXIT_AFTER_RUN: ${ATTACK_EXIT_AFTER_RUN:-0}
+    depends_on:
+      - client
+      - detector
+      - resolver
+      - authoritative
+    networks:
+      attacker_net:
+        ipv4_address: 172.28.0.10
+    volumes:
+      - attack_coordination:/coordination
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    container_name: dnshield-client
+    cap_add:
+      - NET_ADMIN
+    environment:
+      DEFAULT_GATEWAY: 172.28.0.2
+      RESOLVER_IP: 172.29.0.10
+      CLIENT_TARGET_ZONE: lab.dnshield
+      CLIENT_QUERY_PREFIX: ${CLIENT_QUERY_PREFIX:-client}
+      CLIENT_EXACT_QUERY_NAME: ${CLIENT_EXACT_QUERY_NAME:-}
+      CLIENT_DOMAIN_CORPUS_PATH: ${CLIENT_DOMAIN_CORPUS_PATH:-}
+      CLIENT_QUERY_COUNT: 100
+      CLIENT_QUERIES_PER_SECOND: 5
+      CLIENT_RUN_DURATION_SECONDS: 30
+      CLIENT_EXIT_AFTER_RUN: ${CLIENT_EXIT_AFTER_RUN:-0}
+    depends_on:
+      - detector
+      - resolver
+      - authoritative
+    networks:
+      attacker_net:
+        ipv4_address: 172.28.0.11
+
+  resolver:
+    build:
+      context: .
+      dockerfile: resolver/Dockerfile
+    container_name: dnshield-resolver
+    cap_add:
+      - NET_ADMIN
+    environment:
+      DEFAULT_GATEWAY: 172.29.0.2
+    depends_on:
+      - detector
+      - authoritative
+    networks:
+      resolver_net:
+        ipv4_address: 172.29.0.10
+
+  authoritative:
+    build:
+      context: .
+      dockerfile: auth/Dockerfile
+    container_name: dnshield-authoritative
+    cap_add:
+      - NET_ADMIN
+    environment:
+      DEFAULT_GATEWAY: 172.30.0.2
+      NSD_CONF_PATH: /etc/nsd-config/nsd.conf
+      AUTHORITATIVE_RESPONSE_DELAY_MS: 30
+      AUTHORITATIVE_DROP_RESPONSES: 0
+    depends_on:
+      - detector
+    networks:
+      authoritative_net:
+        ipv4_address: 172.30.0.10
+
+networks:
+  attacker_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+  resolver_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.0.0/24
+  authoritative_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  attack_coordination:
